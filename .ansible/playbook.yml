@@ -1,0 +1,59 @@
+- hosts: default
+  remote_user: vagrant
+  become: yes
+  become_user: root
+  become_method: sudo
+  
+  tasks:
+
+  # Hardening
+  - name: 'Hardening: Remove the package "chef"'
+    apt:
+      name: chef
+      state: absent
+
+  # Install Aptitude, update, upgrade & autoremove
+  - name: 'Install aptitude package because Ubuntu 16 weird'
+    apt: name={{item}} state=latest
+    with_items:
+      - aptitude
+  - name: 'Do apt-get update and upgrade'
+    apt:
+      update_cache: yes # ~ apt-get update
+      upgrade: yes      # ~ apt-get upgrade
+      #upgrade: dist     # ~ apt-get dist-upgrade
+      autoremove: yes   # ~ apt-get autoremove
+
+  # Basic modules missing
+  - name: 'Install base packages'
+    apt: name={{item}} state=latest
+    with_items:
+      - curl
+      - unzip
+      - ant
+      - maven
+      - python
+
+  # Install Java (Needed for openlayers package build)
+  - name: 'Add repo for java 8'
+    apt_repository: repo='ppa:webupd8team/java' state=present
+  - name: set licence selected
+    shell: /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
+    sudo: yes
+  - name: set licence seen
+    shell: /bin/echo debconf shared/accepted-oracle-license-v1-1 seen true | /usr/bin/debconf-set-selections
+    sudo: yes
+  - name: install java 8
+    apt: name=oracle-java8-installer state=latest update-cache=yes force=yes
+    sudo: yes
+ 
+  # Run setup
+  - name: './do.sh check_deps' 
+    command: /vagrant/do.sh check_deps
+    register: output
+  - name: './do.sh install_deps' 
+    command: /vagrant/do.sh install_deps
+    when: output.stdout != "All dependencies met."
+    #when: output.find("All dependencies met.") == -1
+  - name: './do.sh build' 
+    command: /vagrant/do.sh build
